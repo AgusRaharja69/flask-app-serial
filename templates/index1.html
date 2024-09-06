@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frequency Display</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        h2 {
+            margin: 20px 0;
+        }
+
+        button, select {
+            font-size: 1.5em; /* Match h2 size */
+            padding: 10px 20px;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button.start {
+            background-color: #e0e0e0; /* Default green color */
+            color: rgb(0, 0, 0);
+        }
+
+        button.start.active {
+            background-color: #4CAF50; /* Darker green when active */
+        }
+
+        button.reset {
+            background-color: #f44336; /* Red color for reset */
+            color: white;
+        }
+
+        button:disabled {
+            background-color: #e0e0e0;
+            color: #9e9e9e;
+            cursor: not-allowed;
+        }
+
+        #timer {
+            font-size: 24px;
+            color: green;
+        }
+
+        .timer-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+        }
+
+        .timer-title {
+            font-size: 16px;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .timer-container {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        .additional-timers {
+            margin-top: 20px;
+        }
+
+        .timer-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+        }
+
+        /* Center the main timer and frequency in one row with two columns */
+        .main-timer-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 50px; /* Adjust the gap between the columns as needed */
+            margin-top: 20px;
+        }
+
+        .main-timer-container .column {
+            text-align: center;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgb(0,0,0); /* Fallback color */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+        }
+
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+    <script>
+        let startReading = false;
+        let isMainTimerRunning = false;
+        let mainTimer = null;
+        let mainTimerMinutes = 0;
+        let mainTimerSeconds = 0;
+        let setFrequency = 1.0;
+        let currentTimerId = null;
+
+        function showModal(timerId) {
+            currentTimerId = timerId;
+            document.getElementById('titleModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('titleModal').style.display = 'none';
+        }
+
+        function saveTitle() {
+            if (currentTimerId !== null) {
+                const title = document.getElementById('timerTitleInput').value;
+                const titleElement = document.getElementById(`title${currentTimerId}`);
+                if (titleElement) {
+                    titleElement.innerText = title;
+                }
+            }
+            closeModal();
+        }
+    
+        // Object to hold additional timers and their intervals
+        const additionalTimers = {};
+    
+        function fetchData() {
+            if (!startReading) return;
+    
+            fetch('/data')
+                .then(response => response.json())
+                .then(data => {
+                    const frequency = parseFloat(data.frequency.toFixed(2));
+                    document.getElementById('frequency').innerText = frequency + ' Hz';
+    
+                    // Start the main timer only if frequency is greater than the set frequency and the timer isn't already running
+                    if (frequency > setFrequency && !mainTimer && isMainTimerRunning) {
+                        startMainTimer();
+                    }
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+    
+        function startMainTimer() {
+            mainTimer = setInterval(() => {
+                mainTimerSeconds++;
+                if (mainTimerSeconds === 60) {
+                    mainTimerMinutes++;
+                    mainTimerSeconds = 0;
+                }
+                updateTimerDisplay('timer', mainTimerMinutes, mainTimerSeconds);
+                
+                // Update each additional timer every second
+                for (let i = 1; i <= 10; i++) {
+                    if (additionalTimers[i] && additionalTimers[i].running) {
+                        additionalTimers[i].seconds++;
+                        if (additionalTimers[i].seconds === 60) {
+                            additionalTimers[i].minutes++;
+                            additionalTimers[i].seconds = 0;
+                        }
+                        updateTimerDisplay(`timer${i}`, additionalTimers[i].minutes, additionalTimers[i].seconds);
+                    }
+                }
+            }, 1000);
+        }
+    
+        function stopMainTimer() {
+            clearInterval(mainTimer);
+            mainTimer = null;
+            isMainTimerRunning = false;
+    
+            // Get the current value of the main timer
+            const [mainMinutes, mainSeconds] = getTimerValue('timer');
+    
+            // Iterate through all additional timers
+            for (let i = 1; i <= 10; i++) {
+                const additionalTimerElement = document.getElementById(`timer${i}`);
+                const [additionalMinutes, additionalSeconds] = getTimerValue(`timer${i}`);
+    
+                // Check if the additional timer is at '0m 0s'
+                if (additionalMinutes === 0 && additionalSeconds === 0) {
+                    // Update the additional timer to match the main timer's value
+                    updateTimerDisplay(`timer${i}`, mainMinutes, mainSeconds);
+                }
+            }
+        }
+    
+        function reset() {
+            stopMainTimer();
+            mainTimerMinutes = 0;
+            mainTimerSeconds = 0;
+            updateTimerDisplay('timer', mainTimerMinutes, mainTimerSeconds);
+            document.getElementById('frequency').innerText = '0.00 Hz';
+            startReading = false;  // Stop reading data until the start button is clicked again
+    
+            // Reset additional timers
+            for (let i = 1; i <= 10; i++) {
+                updateTimerDisplay(`timer${i}`, 0, 0);
+                if (additionalTimers[i]) {
+                    additionalTimers[i].minutes = 0;
+                    additionalTimers[i].seconds = 0;
+                    additionalTimers[i].running = false;
+                }
+            }
+
+            document.getElementById('startButton').classList.remove('active');
+        }
+    
+        function start() {
+            startReading = true;
+            isMainTimerRunning = true;
+    
+            // Initialize additional timers with the current value of the main timer
+            const [mainMinutes, mainSeconds] = getTimerValue('timer');
+            for (let i = 1; i <= 10; i++) {
+                additionalTimers[i] = { minutes: mainMinutes, seconds: mainSeconds, running: true };
+                updateTimerDisplay(`timer${i}`, mainMinutes, mainSeconds);
+            }
+
+            // Change button color to indicate it's active
+            document.getElementById('startButton').classList.add('active');
+        }
+    
+        function updateAdditionalTimer(timerId, action) {
+            if (action === 'stop') {
+                if (additionalTimers[timerId]) {
+                    additionalTimers[timerId].running = false;
+                    updateTimerDisplay(`timer${timerId}`, additionalTimers[timerId].minutes, additionalTimers[timerId].seconds);
+                }
+            } else {
+                const [mainMinutes, mainSeconds] = getTimerValue('timer');
+                if (additionalTimers[timerId]) {
+                    additionalTimers[timerId].minutes = mainMinutes;
+                    additionalTimers[timerId].seconds = mainSeconds;
+                    additionalTimers[timerId].running = true;
+                    updateTimerDisplay(`timer${timerId}`, mainMinutes, mainSeconds);
+                }
+            }
+        }
+    
+        function updateTimerDisplay(elementId, minutes, seconds) {
+            document.getElementById(elementId).innerText = `Timer: ${minutes}m ${seconds}s`;
+        }
+    
+        function getTimerValue(elementId) {
+            const timerText = document.getElementById(elementId).innerText;
+            const [minutes, seconds] = timerText.split(': ')[1].split('m ');
+            return [parseInt(minutes, 10), parseInt(seconds, 10)];
+        }
+    
+        function handleKeyPress(event) {
+            const key = event.key;
+
+            // Stop the main timer when 'a' is pressed
+            if (key === 'a') {
+                stopMainTimer();
+                // Do not change startReading, so the data fetching continues
+            }
+
+            // Stop timer10 when '0' is pressed
+            if (key === '0') {
+                updateAdditionalTimer(10, 'stop');
+            }
+            
+            // Update or stop additional timers when '1', '2', ..., '9' are pressed
+            if (key >= '1' && key <= '9') {
+                const timerId = parseInt(key, 10);
+                // Toggle between update and stop based on timer status
+                if (additionalTimers[timerId] && additionalTimers[timerId].running) {
+                    updateAdditionalTimer(timerId, 'stop');
+                } else {
+                    updateAdditionalTimer(timerId, 'update');
+                }
+            }
+        }
+    
+        document.addEventListener('keydown', handleKeyPress);
+    
+        setInterval(fetchData, 300);
+    </script>
+</head>
+<body>
+    <h1>Timer Window</h1>
+    <button id="startButton" class="start" onclick="start()">Start</button>
+    <button class="reset" onclick="reset()">Reset</button>
+
+    <h2>Set Frequency Threshold:</h2>
+    <select id="frequencySelect" onchange="setFrequency = parseFloat(this.value)">
+        <option value="1">1 Hz</option>
+        <option value="2">2 Hz</option>
+        <option value="3">3 Hz</option>
+        <option value="4">4 Hz</option>
+        <option value="5">5 Hz</option>
+    </select>
+
+    <div class="timer-container">
+        <div class="column">
+            <h2>Current Frequency: <span id="frequency">0.00 Hz</span></h2>
+        </div>
+        <div class="column">
+            <h2 id="timer">Timer: 0m 0s</h2>
+        </div>
+    </div>
+
+    <div class="additional-timers">
+        <h2>Participants Timers:</h2>
+        <div class="timer-grid">
+            <div class="timer-item">
+                <div id="title1" class="timer-title">Tim 1</div>
+                <div id="timer1" class="timer-container" onclick="showModal(1)">Timer: 0m 0s</div>
+            </div>
+            <div class="timer-item">
+                <div id="title2" class="timer-title">Tim 2</div>
+                <div id="timer2" class="timer-container" onclick="showModal(2)">Timer: 0m 0s</div>
+            </div>
+            <div class="timer-item">
+                <div id="title3" class="timer-title">Tim 3</div>
+                <div id="timer3" class="timer-container" onclick="showModal(3)">Timer: 0m 0s</div>
+            </div>
+            <div class="timer-item">
+                <div id="title4" class="timer-title">Tim 4</div>
+                <div id="timer4" class="timer-container" onclick="showModal(4)">Timer: 0m 0s</div>
+            </div>
+            <div class="timer-item">
+                <div id="title5" class="timer-title">Tim 5</div>
+                <div id="timer5" class="timer-container" onclick="showModal(5)">Timer: 0m 0s</div>
+            </div>
+            <div class="timer-item">
+                <div id="title6" class="timer-title">Tim 6</div>
+                <div id="timer6" class="timer-container" onclick="showModal(6)">Timer: 0m 0s</div>
+            </div>
+            <div class="timer-item">
+                <div id="title7" class="timer-title">Tim 7</div>
+                <div id="timer7" class="timer-container" onclick="showModal(7)">Timer: 0m 0s</div>
+            </div>
+            <div class="timer-item">
+                <div id="title8" class="timer-title">Tim 8</div>
+                <div id="timer8" class="timer-container" onclick="showModal(8)">Timer: 0m 0s</div>
+            </div>
+            <div class="timer-item">
+                <div id="title9" class="timer-title">Tim 9</div>
+                <div id="timer9" class="timer-container" onclick="showModal(9)">Timer: 0m 0s</div>
+            </div>
+            <div class="timer-item">
+                <div id="title10" class="timer-title">Tim 10</div>
+                <div id="timer10" class="timer-container" onclick="showModal(10)">Timer: 0m 0s</div>
+            </div>
+        </div>
+
+        <!-- Modal Structure -->
+        <div id="titleModal" class="modal">
+            <div class="modal-content">
+                <span class="close-button" onclick="closeModal()">&times;</span>
+                <h2>Set Timer Title</h2>
+                <input type="text" id="timerTitleInput" placeholder="Enter title here">
+                <button onclick="saveTitle()">Save</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

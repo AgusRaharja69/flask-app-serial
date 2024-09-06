@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport="width=device-width, initial-scale=1.0">
+    <title>Frequency Display</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        h1, h2 {
+            margin: 20px 0;
+        }
+        button, select {
+            margin: 10px 0;
+            padding: 10px;
+            font-size: 16px;
+        }
+        #timer {
+            font-size: 24px;
+            color: green;
+        }
+    </style>
+    <script>
+        let startReading = false;
+let isTimerRunning = false;  // Changed from startTimer to isTimerRunning for clarity
+let timer = null;
+let timerMinutes = 0;
+let timerSeconds = 0;
+let setFrequency = 1.0;
+
+function fetchData() {
+    if (!startReading) return;
+
+    fetch('/data')
+        .then(response => response.json())
+        .then(data => {
+            const frequency = parseFloat(data.frequency.toFixed(2));
+            document.getElementById('frequency').innerText = frequency + ' Hz';
+
+            // Start the timer only if frequency is greater than the set frequency and the timer isn't already running
+            if (frequency > setFrequency && !timer && isTimerRunning) {
+                startTimer();
+            }
+        });
+}
+
+function startTimer() {
+    timer = setInterval(() => {
+        timerSeconds++;
+        if (timerSeconds === 60) {
+            timerMinutes++;
+            timerSeconds = 0;
+        }
+        document.getElementById('timer').innerText = `Timer: ${timerMinutes}m ${timerSeconds}s`;
+    }, 1000);
+}
+
+function stopTimer() {
+    clearInterval(timer);
+    timer = null;
+    isTimerRunning = false;  // Ensure the timer stops running
+}
+
+function reset() {
+    stopTimer();
+    timerMinutes = 0;
+    timerSeconds = 0;
+    document.getElementById('timer').innerText = 'Timer: 0m 0s';
+    document.getElementById('frequency').innerText = '0.00 Hz';
+    startReading = false;  // Stop reading data until the start button is clicked again
+}
+
+function start() {
+    startReading = true;
+    isTimerRunning = true;
+}
+
+function handleKeyPress(event) {
+    if (event.key === '1') {
+        stopTimer();  // Stop the timer when 'a' is pressed
+        // Do not change startReading, so the data fetching continues
+    }
+}
+
+document.addEventListener('keydown', handleKeyPress);
+
+setInterval(fetchData, 100);
+    </script>
+</head>
+<body>
+    <h1>Current Frequency: <span id="frequency">0.00 Hz</span></h1>
+    <button onclick="start()">Start</button>
+    <button onclick="reset()">Reset</button>
+
+    <h2>Set Frequency Threshold:</h2>
+    <select id="frequencySelect" onchange="setFrequency = parseFloat(this.value)">
+        <option value="1">1 Hz</option>
+        <option value="2">2 Hz</option>
+        <option value="3">3 Hz</option>
+        <option value="4">4 Hz</option>
+        <option value="5">5 Hz</option>
+    </select>
+
+    <h2 id="timer">Timer: 0m 0s</h2>
+    <!-- <h2 id="timer1">Timer: 0m 0s</h2>
+    <h2 id="timer2">Timer: 0m 0s</h2>
+    <h2 id="timer3">Timer: 0m 0s</h2>
+    <h2 id="timer4">Timer: 0m 0s</h2>
+    <h2 id="timer5">Timer: 0m 0s</h2>
+    <h2 id="timer6">Timer: 0m 0s</h2>
+    <h2 id="timer7">Timer: 0m 0s</h2>
+    <h2 id="timer8">Timer: 0m 0s</h2> -->
+</body>
+</html>
